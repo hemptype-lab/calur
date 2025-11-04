@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Калькулятор урожая</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card-bg: #1e1e1e;
+      --text: #e0e0e0;
+      --accent: #4caf50;
+      --input-bg: #2c2c2c;
+      --border: #333;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 24px;
+      font-size: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .result {
+      margin-top: 24px;
+      padding: 16px;
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      display: none;
+    }
+
+    .result h2 {
+      margin-bottom: 12px;
+    }
+
+    .result p {
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌿 Калькулятор урожая</h1>
+
+    <form id="yieldForm">
+      <div class="form-group">
+        <label for="potVolume">Объём одного горшка (л)</label>
+        <input type="number" id="potVolume" min="1" step="0.1" required placeholder="Например, 11">
+      </div>
+
+      <div class="form-group">
+        <label for="numPots">Количество горшков (макс. 14)</label>
+        <input type="number" id="numPots" min="1" max="14" required placeholder="Например, 4">
+      </div>
+
+      <div class="form-group">
+        <label for="area">Площадь гроу-бокса (м²)</label>
+        <input type="number" id="area" min="0.1" step="0.1" required placeholder="Например, 1">
+      </div>
+
+      <div class="form-group">
+        <label for="lightPower">Мощность света (Вт)</label>
+        <input type="number" id="lightPower" min="10" required placeholder="Например, 200">
+      </div>
+
+      <div class="form-group">
+        <label for="substrate">Тип субстрата</label>
+        <select id="substrate" required>
+          <option value="soil">Грунт</option>
+          <option value="coco">Кокос</option>
+          <option value="hydro">Гидропоника</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="strainType">Тип семечки</label>
+        <select id="strainType" required>
+          <option value="auto">Автопериодичная (автик)</option>
+          <option value="photo">Фотопериодичная (фотик)</option>
+        </select>
+      </div>
+
+      <button type="submit">Рассчитать урожай</button>
+    </form>
+
+    <div class="result" id="result">
+      <h2>Результат</h2>
+      <p id="dryPerPlant">Сухой урожай с куста: — г</p>
+      <p id="dryTotal">Общий сухой урожай: — г</p>
+    </div>
+  </div>
+
+  <script>
+    // Telegram Mini App: попытка инициализации SDK (опционально)
+    if (window.Telegram?.WebApp) {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    }
+
+    document.getElementById('yieldForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      const potVolume = parseFloat(document.getElementById('potVolume').value);
+      const numPots = parseInt(document.getElementById('numPots').value);
+      const area = parseFloat(document.getElementById('area').value);
+      const lightPower = parseFloat(document.getElementById('lightPower').value);
+      const substrate = document.getElementById('substrate').value;
+      const strainType = document.getElementById('strainType').value;
+
+      // Базовое значение k
+      let k = 1.0;
+
+      // Коррекция по субстрату
+      if (substrate === 'soil') k *= 0.9;
+      else if (substrate === 'coco') k *= 0.95;
+      else if (substrate === 'hydro') k *= 1.0;
+
+      // Коррекция по типу семечки
+      if (strainType === 'auto') k *= 0.85; // среднее между 0.8–0.9
+      else if (strainType === 'photo') k *= 0.95; // среднее между 0.9–1.0
+
+      // Расчёт сырого урожая
+      const rawYield = k * Math.sqrt(potVolume) * (lightPower / area);
+
+      // Усушка: 83% → остаётся 17%
+      const dryYieldPerPlant = rawYield * 0.17;
+      const dryTotal = dryYieldPerPlant * numPots;
+
+      // Отображение
+      document.getElementById('dryPerPlant').textContent = `Сухой урожай с куста: ${dryYieldPerPlant.toFixed(1)} г`;
+      document.getElementById('dryTotal').textContent = `Общий сухой урожай: ${dryTotal.toFixed(1)} г`;
+      document.getElementById('result').style.display = 'block';
+    });
+  </script>
+</body>
+</html>
