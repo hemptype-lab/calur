@@ -87,12 +87,11 @@
       display: none;
     }
 
-    .result h2 {
-      margin-bottom: 12px;
-    }
-
-    .result p {
-      margin: 6px 0;
+    .error {
+      color: #ff5252;
+      margin-top: 12px;
+      font-size: 14px;
+      display: none;
     }
   </style>
 </head>
@@ -103,7 +102,7 @@
     <form id="yieldForm">
       <div class="form-group">
         <label for="potVolume">Объём одного горшка (л)</label>
-        <input type="number" id="potVolume" min="1" step="0.1" required placeholder="Например, 11">
+        <input type="number" id="potVolume" min="0.1" step="0.1" required placeholder="Например, 11">
       </div>
 
       <div class="form-group">
@@ -139,6 +138,7 @@
       </div>
 
       <button type="submit">Рассчитать урожай</button>
+      <div class="error" id="error"></div>
     </form>
 
     <div class="result" id="result">
@@ -149,7 +149,7 @@
   </div>
 
   <script>
-    // Telegram Mini App: попытка инициализации SDK (опционально)
+    // Telegram Mini App поддержка
     if (window.Telegram?.WebApp) {
       Telegram.WebApp.ready();
       Telegram.WebApp.expand();
@@ -158,12 +158,40 @@
     document.getElementById('yieldForm').addEventListener('submit', function (e) {
       e.preventDefault();
 
-      const potVolume = parseFloat(document.getElementById('potVolume').value);
-      const numPots = parseInt(document.getElementById('numPots').value);
-      const area = parseFloat(document.getElementById('area').value);
-      const lightPower = parseFloat(document.getElementById('lightPower').value);
+      // Скрыть предыдущие результаты и ошибки
+      document.getElementById('result').style.display = 'none';
+      document.getElementById('error').style.display = 'none';
+
+      // Получаем значения
+      const potVolumeEl = document.getElementById('potVolume');
+      const numPotsEl = document.getElementById('numPots');
+      const areaEl = document.getElementById('area');
+      const lightPowerEl = document.getElementById('lightPower');
+
+      const potVolume = parseFloat(potVolumeEl.value);
+      const numPots = parseInt(numPotsEl.value, 10);
+      const area = parseFloat(areaEl.value);
+      const lightPower = parseFloat(lightPowerEl.value);
       const substrate = document.getElementById('substrate').value;
       const strainType = document.getElementById('strainType').value;
+
+      // Валидация
+      if (isNaN(potVolume) || potVolume <= 0) {
+        showError('Укажите корректный объём горшка (> 0)');
+        return;
+      }
+      if (isNaN(numPots) || numPots < 1 || numPots > 14) {
+        showError('Количество горшков должно быть от 1 до 14');
+        return;
+      }
+      if (isNaN(area) || area <= 0) {
+        showError('Площадь должна быть > 0 м²');
+        return;
+      }
+      if (isNaN(lightPower) || lightPower <= 0) {
+        showError('Мощность света должна быть > 0 Вт');
+        return;
+      }
 
       // Базовое значение k
       let k = 1.0;
@@ -174,21 +202,36 @@
       else if (substrate === 'hydro') k *= 1.0;
 
       // Коррекция по типу семечки
-      if (strainType === 'auto') k *= 0.85; // среднее между 0.8–0.9
-      else if (strainType === 'photo') k *= 0.95; // среднее между 0.9–1.0
+      if (strainType === 'auto') k *= 0.85; // среднее 0.8–0.9
+      else if (strainType === 'photo') k *= 0.95; // среднее 0.9–1.0
 
-      // Расчёт сырого урожая
+      // Проверка на деление на ноль (на всякий случай)
+      if (area <= 0) {
+        showError('Площадь не может быть нулевой');
+        return;
+      }
+
+      // Расчёт
       const rawYield = k * Math.sqrt(potVolume) * (lightPower / area);
-
-      // Усушка: 83% → остаётся 17%
-      const dryYieldPerPlant = rawYield * 0.17;
+      const dryYieldPerPlant = rawYield * 0.17; // 83% усушка → остаётся 17%
       const dryTotal = dryYieldPerPlant * numPots;
 
       // Отображение
+      if (isNaN(dryYieldPerPlant) || isNaN(dryTotal)) {
+        showError('Ошибка расчёта. Проверьте введённые данные.');
+        return;
+      }
+
       document.getElementById('dryPerPlant').textContent = `Сухой урожай с куста: ${dryYieldPerPlant.toFixed(1)} г`;
       document.getElementById('dryTotal').textContent = `Общий сухой урожай: ${dryTotal.toFixed(1)} г`;
       document.getElementById('result').style.display = 'block';
     });
+
+    function showError(message) {
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    }
   </script>
 </body>
 </html>
