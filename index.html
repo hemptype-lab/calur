@@ -111,18 +111,14 @@
       </div>
 
       <div class="form-group">
-        <label for="area">Площадь гроу-бокса (м²)</label>
-        <input type="number" id="area" min="0.1" step="0.1" required placeholder="Например, 1">
-      </div>
-
-      <div class="form-group">
         <label for="lightPower">Мощность света (Вт)</label>
-        <input type="number" id="lightPower" min="10" required placeholder="Например, 200">
+        <input type="number" id="lightPower" min="10" required placeholder="Например, 400">
       </div>
 
+      <!-- Остальные поля можно оставить для будущего расширения, но не использовать в расчёте -->
       <div class="form-group">
-        <label for="substrate">Тип субстрата</label>
-        <select id="substrate" required>
+        <label for="substrate">Тип субстрата (не влияет на расчёт)</label>
+        <select id="substrate">
           <option value="soil">Грунт</option>
           <option value="coco">Кокос</option>
           <option value="hydro">Гидропоника</option>
@@ -130,10 +126,10 @@
       </div>
 
       <div class="form-group">
-        <label for="strainType">Тип семечки</label>
-        <select id="strainType" required>
-          <option value="auto">Автопериодичная (автик)</option>
-          <option value="photo">Фотопериодичная (фотик)</option>
+        <label for="strainType">Тип семечки (не влияет на расчёт)</label>
+        <select id="strainType">
+          <option value="auto">Автопериодичная</option>
+          <option value="photo">Фотопериодичная</option>
         </select>
       </div>
 
@@ -145,11 +141,11 @@
       <h2>Результат</h2>
       <p id="dryPerPlant">Сухой урожай с куста: — г</p>
       <p id="dryTotal">Общий сухой урожай: — г</p>
+      <p id="wattsPerPlant" style="font-size:13px;color:#aaa;"></p>
     </div>
   </div>
 
   <script>
-    // Telegram Mini App поддержка
     if (window.Telegram?.WebApp) {
       Telegram.WebApp.ready();
       Telegram.WebApp.expand();
@@ -158,79 +154,50 @@
     document.getElementById('yieldForm').addEventListener('submit', function (e) {
       e.preventDefault();
 
-      // Скрыть предыдущие результаты и ошибки
       document.getElementById('result').style.display = 'none';
       document.getElementById('error').style.display = 'none';
 
-      // Получаем значения
-      const potVolumeEl = document.getElementById('potVolume');
-      const numPotsEl = document.getElementById('numPots');
-      const areaEl = document.getElementById('area');
-      const lightPowerEl = document.getElementById('lightPower');
-
-      const potVolume = parseFloat(potVolumeEl.value);
-      const numPots = parseInt(numPotsEl.value, 10);
-      const area = parseFloat(areaEl.value);
-      const lightPower = parseFloat(lightPowerEl.value);
-      const substrate = document.getElementById('substrate').value;
-      const strainType = document.getElementById('strainType').value;
+      const potVolume = parseFloat(document.getElementById('potVolume').value);
+      const numPots = parseInt(document.getElementById('numPots').value, 10);
+      const lightPower = parseFloat(document.getElementById('lightPower').value);
 
       // Валидация
-      if (isNaN(potVolume) || potVolume <= 0) {
-        showError('Укажите корректный объём горшка (> 0)');
-        return;
-      }
-      if (isNaN(numPots) || numPots < 1 || numPots > 14) {
-        showError('Количество горшков должно быть от 1 до 14');
-        return;
-      }
-      if (isNaN(area) || area <= 0) {
-        showError('Площадь должна быть > 0 м²');
-        return;
-      }
-      if (isNaN(lightPower) || lightPower <= 0) {
-        showError('Мощность света должна быть > 0 Вт');
-        return;
-      }
+      if (isNaN(potVolume) || potVolume <= 0) return showError('Объём горшка должен быть > 0');
+      if (isNaN(numPots) || numPots < 1 || numPots > 14) return showError('Горшков: 1–14');
+      if (isNaN(lightPower) || lightPower <= 0) return showError('Мощность света > 0');
 
-      // Базовое значение k
-      let k = 1.0;
+      // Вт на растение
+      const wattsPerPlant = lightPower / numPots;
 
-      // Коррекция по субстрату
-      if (substrate === 'soil') k *= 0.9;
-      else if (substrate === 'coco') k *= 0.95;
-      else if (substrate === 'hydro') k *= 1.0;
+      // Сырой урожай по 0.81 г/Вт
+      let rawYieldPerPlant = 0.81 * wattsPerPlant;
 
-      // Коррекция по типу семечки
-      if (strainType === 'auto') k *= 0.85; // среднее 0.8–0.9
-      else if (strainType === 'photo') k *= 0.95; // среднее 0.9–1.0
-
-      // Проверка на деление на ноль (на всякий случай)
-      if (area <= 0) {
-        showError('Площадь не может быть нулевой');
-        return;
+      // Ограничение по объёму горшка (реализм): не более ~25 г сырого на литр
+      const maxRawByPot = potVolume * 25;
+      if (rawYieldPerPlant > maxRawByPot) {
+        rawYieldPerPlant = maxRawByPot;
       }
 
-      // Расчёт
-      const rawYield = k * Math.sqrt(potVolume) * (lightPower / area);
-      const dryYieldPerPlant = rawYield * 0.17; // 83% усушка → остаётся 17%
+      // Усушка 83% → остаётся 17%
+      const dryYieldPerPlant = rawYieldPerPlant * 0.17;
       const dryTotal = dryYieldPerPlant * numPots;
 
-      // Отображение
-      if (isNaN(dryYieldPerPlant) || isNaN(dryTotal)) {
-        showError('Ошибка расчёта. Проверьте введённые данные.');
-        return;
+      // Защита от некорректных чисел
+      if (!isFinite(dryYieldPerPlant) || !isFinite(dryTotal)) {
+        return showError('Ошибка расчёта');
       }
 
+      // Отображение
       document.getElementById('dryPerPlant').textContent = `Сухой урожай с куста: ${dryYieldPerPlant.toFixed(1)} г`;
       document.getElementById('dryTotal').textContent = `Общий сухой урожай: ${dryTotal.toFixed(1)} г`;
+      document.getElementById('wattsPerPlant').textContent = `Освещение: ${wattsPerPlant.toFixed(1)} Вт/куст`;
       document.getElementById('result').style.display = 'block';
     });
 
     function showError(message) {
-      const errorEl = document.getElementById('error');
-      errorEl.textContent = message;
-      errorEl.style.display = 'block';
+      const el = document.getElementById('error');
+      el.textContent = message;
+      el.style.display = 'block';
     }
   </script>
 </body>
